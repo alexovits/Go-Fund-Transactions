@@ -14,7 +14,7 @@ func BenchmarkWithdrawals(b *testing.B) {
 	}
 
 	// Add as many dollars as we have iterations this run
-	fund := NewFund(b.N)
+	server := NewFundServer(b.N)
 
 	// Casually assume b.N divides cleanly
 	dollarsPerFounder := b.N / WORKERS
@@ -32,18 +32,31 @@ func BenchmarkWithdrawals(b *testing.B) {
 		go func() {
 			// At the end of the clojure call Done on the WaitGroup semaphore
 			defer wg.Done()
-
+			pizzaTime := false
 			for i := 0; i < dollarsPerFounder; i++ {
-				fund.Withdraw(1)
-			}
 
+				server.Transact(func(fund *Fund) {
+					if fund.Balance() <= 10 {
+						// Set it in the outside scope
+						pizzaTime = true
+						return
+					}
+					fund.Withdraw(1)
+				})
+
+				if pizzaTime {
+					break
+				}
+			}
 		}()
 	}
 
 	// Wait for all the workers to finish
 	wg.Wait()
 
-	if fund.Balance() != 0 {
-		b.Error("Balance wasn't zero:", fund.Balance())
+	balance := server.Balance()
+
+	if balance != 10 {
+		b.Error("Balance wasn't ten dollars:", balance)
 	}
 }
